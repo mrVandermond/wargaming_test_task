@@ -1,12 +1,12 @@
 import sys
 
 from PyQt6.QtWidgets import QApplication, QWidget
-from PyQt6.QtCore import QRect, Qt, QPoint
+from PyQt6.QtCore import QRect
 from PyQt6.QtGui import QPalette, QColor, QPainter, QPen
 
 import constants as const
 
-from enums import ActionEnum
+from enums import ActionType
 from scene_state import SceneState
 
 
@@ -18,9 +18,10 @@ class MainWindow(QWidget):
         self.__init_background()
         self.__init_window_size()
 
-        self.scene_state = SceneState()
+        self.scene = SceneState()
 
     def __init_window_size(self):
+        """Initialises the window size and position"""
         x = (self.screen_size.width() - self.screen_size.x()) // 2 - const.WINDOW_WIDTH // 2
         y = (self.screen_size.height() - self.screen_size.y()) // 2 - const.WINDOW_HEIGHT // 2
         window_rect = QRect(x, y, const.WINDOW_WIDTH, const.WINDOW_HEIGHT)
@@ -28,63 +29,78 @@ class MainWindow(QWidget):
         self.setGeometry(window_rect)
 
     def __init_background(self):
+        """Initialises the background of window"""
         palette = self.palette()
         palette.setColor(QPalette.ColorRole.Window, QColor(255, 255, 255))
 
         self.setPalette(palette)
 
-    def paintEvent(self, event):
-        painter = QPainter(self)
-
-        for rect in self.scene_state.rectangles:
+    def __draw_rectangles(self, painter):
+        """Draws all rectangles"""
+        for rect in self.scene.rectangles:
             painter.fillRect(rect["rect"], rect["color"])
 
+    def __draw_reference_lines(self, painter):
+        """Draw all reference lines"""
         pen = QPen(QColor(0, 0, 0))
         pen.setWidthF(3)
         painter.setPen(pen)
 
-        for line in self.scene_state.reference_lines.values():
-            painter.drawLine(line["start_point"].x(), line["start_point"].y(), line["end_point"].x(), line["end_point"].y())
+        for line in self.scene.reference_lines.values():
+            x1 = line["start_point"].x()
+            x2 = line["end_point"].x()
+            y1 = line["start_point"].y()
+            y2 = line["end_point"].y()
+            painter.drawLine(x1, y1, x2, y2)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+
+        self.__draw_rectangles(painter)
+        self.__draw_reference_lines(painter)
 
     def mouseDoubleClickEvent(self, event):
-        self.scene_state.create_rect(event.pos())
+        self.scene.create_rect(event.pos())
         self.update()
 
     def mousePressEvent(self, event):
         event_point = event.pos()
 
-        self.scene_state.set_current_action(event)
+        self.scene.set_current_action(event)
 
-        if self.scene_state.current_action == ActionEnum.DRAG_RECT:
-            self.scene_state.start_drag_rect(event_point)
+        if self.scene.current_action == ActionType.DRAG_RECT:
+            self.scene.start_drag_rect(event_point)
             return
 
-        if self.scene_state.current_action == ActionEnum.CREATE_REF_LINE:
-            self.scene_state.start_creating_ref_line(event_point)
+        if self.scene.current_action == ActionType.CREATE_REF_LINE:
+            self.scene.start_creating_ref_line(event_point)
             return
 
-        if self.scene_state.current_action == ActionEnum.DELETE_REF_LINE:
-            self.scene_state.delete_ref_line(event_point)
+        if self.scene.current_action == ActionType.DELETE_REF_LINE:
+            self.scene.delete_ref_line(event_point)
             self.update()
             return
 
     def mouseMoveEvent(self, event):
         event_point = event.pos()
 
-        if self.scene_state.current_action == ActionEnum.DRAG_RECT:
-            self.scene_state.drag_rect(event_point)
+        if self.scene.current_action == ActionType.DRAG_RECT:
+            self.scene.drag_rect(event_point)
 
-        if self.scene_state.current_action == ActionEnum.CREATE_REF_LINE:
-            self.scene_state.move_end_point_ref_line(event_point)
+        if self.scene.current_action == ActionType.CREATE_REF_LINE:
+            self.scene.move_end_point_ref_line(event_point)
 
         self.update()
 
     def mouseReleaseEvent(self, event):
-        if self.scene_state.current_action == ActionEnum.CREATE_REF_LINE:
-            self.scene_state.end_creating_ref_line(event.pos())
+        if self.scene.current_action == ActionType.DRAG_RECT:
+            self.scene.finish_drag_rect()
+
+        if self.scene.current_action == ActionType.CREATE_REF_LINE:
+            self.scene.finish_creating_ref_line(event.pos())
             self.update()
 
-        self.scene_state.reset_temporal_state()
+        self.scene.reset_temporal_data()
 
 
 if __name__ == '__main__':

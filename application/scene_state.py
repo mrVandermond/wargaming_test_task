@@ -1,23 +1,38 @@
-from PyQt6.QtCore import Qt, QPoint
+from PyQt6.QtCore import Qt, QPoint, QRect
 
 import utils
 
-from enums import ActionEnum
+from constants import WINDOW_HEIGHT, WINDOW_WIDTH, RECT_HEIGHT, RECT_WIDTH
+from quad_tree import QuadTree
+from enums import ActionType
 
 
 class SceneState:
     def __init__(self):
-        self.__rectangles = []
+        # map of all reference lines between rectangles
+        # key -> line id
+        # value -> dictionary with line's data
         self.__reference_lines = {}
 
-        self.__current_draggable_rect_index = -1
-        self.__current_ref_line_id = None
+        # map of links between reference lines and rectangles
+        # key -> rectangle id
+        # value -> list of related line id
+        self.__rectangle_refs = {}
 
+        # line id used in process of creating new line
+        self.__current_line_id = None
+
+        # action type of current process
         self.__current_action = None
+
+        # rect id used in process of dragging rect
+        self.__current_rect_id = None
+
+        self.__qtree = QuadTree(QRect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT))
 
     @property
     def rectangles(self):
-        return self.__rectangles
+        return self.__qtree.traverse()
 
     @property
     def reference_lines(self):
@@ -28,103 +43,138 @@ class SceneState:
         return self.__current_action
 
     def start_creating_ref_line(self, event_point):
-        rect_index = utils.find_rect_under_point(event_point, self.__rectangles)
+        """Initiates a process of creating the reference line"""
+        found_rects = self.__qtree.query(QRect(event_point.x(), event_point.y(), 1, 1))
 
-        if rect_index == -1:
+        # check that only one rectangle under current event_point
+        if len(found_rects) == 0 or len(found_rects) > 1:
             return
 
+        rect = found_rects[0]
         line_id = utils.generate_random_id()
         self.__reference_lines[line_id] = {
-            "line_id": line_id,
-            "left_rect_index": rect_index,
-            "right_rect_index": None,
+            "id": line_id,
+            "first_rect_id": rect["id"],
+            "second_rect_id": None,
             "start_point": event_point,
             "end_point": event_point,
         }
-        self.__current_ref_line_id = line_id
+        self.__current_line_id = line_id
 
     def move_end_point_ref_line(self, event_point):
-        if self.__current_ref_line_id is None:
+        """Moves end point of current line while line has not linked with second rectangle"""
+        if self.__current_line_id is None:
             return
 
-        line = self.__reference_lines[self.__current_ref_line_id]
+        line = self.__reference_lines[self.__current_line_id]
         line["end_point"] = event_point
 
-    def end_creating_ref_line(self, event_point):
-        rect_index = utils.find_rect_under_point(event_point, self.__rectangles)
-        line = self.__reference_lines[self.__current_ref_line_id]
+    def finish_creating_ref_line(self, event_point):
+        """Finishes the process of creating the reference line"""
+        rects = self.__qtree.query(QRect(event_point.x(), event_point.y(), 1, 1))
+        rects_count = len(rects)
+        line = self.__reference_lines[self.__current_line_id]
 
-        if rect_index == -1 or rect_index == line["left_rect_index"]:
-            self.__reference_lines.pop(self.__current_ref_line_id)
+        # if under current event_point have no rects
+        # or there are more than 1 rect
+        # or rect only one and this is first rect of the line
+        if rects_count == 0 or rects_count > 1 or rects[0]["id"] == line["first_rect_id"]:
+            self.__reference_lines.pop(self.__current_line_id)
         else:
-            self.__reference_lines[self.__current_ref_line_id]["right_rect_index"] = rect_index
-            self.__rectangles[line["left_rect_index"]]["refs"].append(self.__current_ref_line_id)
-            self.__rectangles[rect_index]["refs"].append(self.__current_ref_line_id)
+            # otherwise finish filling references between rectangles and lines
+            rect_id = rects[0]["id"]
+            self.__reference_lines[self.__current_line_id]["second_rect_id"] = rect_id
+            self.__rectangle_refs[rect_id].append(self.__current_line_id)
+            self.__rectangle_refs[line["first_rect_id"]].append(self.__current_line_id)
 
     def delete_ref_line(self, point):
+        """Deletes the reference line under the point"""
         for line in self.__reference_lines.values():
             if utils.check_point_on_the_line(point, line["start_point"], line["end_point"]):
-                left_rect = self.__rectangles[line["left_rect_index"]]
-                right_rect = self.__rectangles[line["right_rect_index"]]
-
-                left_rect["refs"] = utils.remove_reference_line_link(line["line_id"], left_rect["refs"])
-                right_rect["refs"] = utils.remove_reference_line_link(line["line_id"], right_rect["refs"])
-
-                self.__reference_lines.pop(line["line_id"])
+                self.__rectangle_refs[line["first_rect_id"]].remove(line["id"])
+                self.__rectangle_refs[line["second_rect_id"]].remove(line["id"])
+                self.__reference_lines.pop(line["id"])
                 break
 
     def create_rect(self, event_point):
-        point = utils.get_adjusted_rect_point(event_point)
+        """Creates a rectangle"""
+        adjusted_point = utils.get_adjusted_rect_point(event_point)
+        rectangles = self.__qtree.query(QRect(adjusted_point.x(), adjusted_point.y(), RECT_WIDTH, RECT_HEIGHT))
 
-        if utils.has_neighbour_rects_in_point(point, self.__rectangles, self.__current_draggable_rect_index):
+        # check that there is no intersections with other rectangles
+        if len(rectangles) != 0:
             return
 
-        self.__rectangles.append({
-            "rect": utils.create_rect(event_point),
+        rect_id = utils.generate_random_id()
+        self.__qtree.insert({
+            "id": rect_id,
+            "rect": QRect(adjusted_point.x(), adjusted_point.y(), RECT_WIDTH, RECT_HEIGHT),
             "color": utils.generate_random_color(),
-            "refs": [],
         })
+        self.__rectangle_refs[rect_id] = []
 
     def start_drag_rect(self, event_point):
-        self.__current_draggable_rect_index = utils.find_rect_under_point(event_point, self.__rectangles)
+        """Initiates a process of dragging the rectangle under the event_point"""
+        found_rects = self.__qtree.query(QRect(event_point.x(), event_point.y(), 1, 1))
+
+        if len(found_rects) == 1:
+            self.__current_rect_id = found_rects[0]
 
     def drag_rect(self, event_point):
-        if self.__current_draggable_rect_index == -1:
+        """Drags current rectangle to the event point if possible"""
+        if self.__current_rect_id is None or self.__current_action != ActionType.DRAG_RECT:
             return
 
-        rect_obj = self.__rectangles[self.__current_draggable_rect_index]
+        rect_obj = self.__current_rect_id
         rect = rect_obj["rect"]
 
         adjusted_point = utils.get_adjusted_rect_point(event_point)
+        rects = self.__qtree.query(QRect(adjusted_point.x(), adjusted_point.y(), RECT_WIDTH, RECT_HEIGHT))
 
-        if not utils.has_neighbour_rects_in_point(adjusted_point, self.__rectangles, self.__current_draggable_rect_index):
+        # remove current rect if it includes into intersected rectangles
+        if rect_obj in rects:
+            rects.remove(rect_obj)
+
+        # check there are no intersected rectangles in the new point
+        if len(rects) == 0:
             dx, dy = utils.calculate_rect_delta(adjusted_point, QPoint(rect.x(), rect.y()))
 
-            for line_id in rect_obj["refs"]:
+            # move all reference lines related to current rectangle
+            for line_id in self.__rectangle_refs[rect_obj["id"]]:
                 line = self.__reference_lines[line_id]
-                point_key = utils.get_key_of_point(self.__current_draggable_rect_index, line)
+                point_key = utils.get_key_of_point(rect_obj["id"], line)
                 line[point_key].setX(line[point_key].x() + dx)
                 line[point_key].setY(line[point_key].y() + dy)
 
             rect.moveTo(adjusted_point)
 
+    def finish_drag_rect(self):
+        """Finishes the process of dragging the current rectangle"""
+        if self.__current_rect_id is None:
+            return
+
+        # update rect position into queue
+        self.__qtree.update(self.__current_rect_id)
+
     def set_current_action(self, event):
+        """Defines current action by event"""
         button = event.button().value
         is_control_pressed = event.modifiers() == Qt.KeyboardModifier.ControlModifier
 
         if button == Qt.MouseButton.LeftButton.value and is_control_pressed:
-            self.__current_action = ActionEnum.DELETE_REF_LINE
+            self.__current_action = ActionType.DELETE_REF_LINE
             return
 
         if button == Qt.MouseButton.LeftButton.value:
-            self.__current_action = ActionEnum.DRAG_RECT
+            self.__current_action = ActionType.DRAG_RECT
             return
 
         if button == Qt.MouseButton.RightButton.value:
-            self.__current_action = ActionEnum.CREATE_REF_LINE
+            self.__current_action = ActionType.CREATE_REF_LINE
             return
 
-    def reset_temporal_state(self):
+    def reset_temporal_data(self):
+        """Resets temporal data used in processes of dragging or moving objects"""
         self.__current_action = None
-        self.__current_draggable_rect_index = -1
-        self.__current_ref_line_id = None
+        self.__current_line_id = None
+        self.__current_rect_id = None
