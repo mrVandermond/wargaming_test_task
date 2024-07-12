@@ -25,8 +25,8 @@ class SceneState:
         # action type of current process
         self.__current_action = None
 
-        # rect id used in process of dragging rect
-        self.__current_rect_id = None
+        # rect used in process of dragging rect
+        self.__current_rect = None
 
         self.__qtree = QuadTree(QRect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT))
 
@@ -118,14 +118,14 @@ class SceneState:
         found_rects = self.__qtree.query(QRect(event_point.x(), event_point.y(), 1, 1))
 
         if len(found_rects) == 1:
-            self.__current_rect_id = found_rects[0]
+            self.__current_rect = found_rects[0]
 
     def drag_rect(self, event_point):
         """Drags current rectangle to the event point if possible"""
-        if self.__current_rect_id is None or self.__current_action != ActionType.DRAG_RECT:
+        if self.__current_rect is None or self.__current_action != ActionType.DRAG_RECT:
             return
 
-        rect_obj = self.__current_rect_id
+        rect_obj = self.__current_rect
         rect = rect_obj["rect"]
 
         adjusted_point = utils.get_adjusted_rect_point(event_point)
@@ -150,11 +150,11 @@ class SceneState:
 
     def finish_drag_rect(self):
         """Finishes the process of dragging the current rectangle"""
-        if self.__current_rect_id is None:
+        if self.__current_rect is None:
             return
 
         # update rect position into queue
-        self.__qtree.update(self.__current_rect_id)
+        self.__qtree.update(self.__current_rect)
 
     def set_current_action(self, event):
         """Defines current action by event"""
@@ -177,4 +177,4 @@ class SceneState:
         """Resets temporal data used in processes of dragging or moving objects"""
         self.__current_action = None
         self.__current_line_id = None
-        self.__current_rect_id = None
+        self.__current_rect = None
