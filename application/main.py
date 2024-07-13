@@ -7,7 +7,7 @@ from PyQt6.QtGui import QPalette, QColor, QPainter, QPen
 import constants as const
 
 from enums import ActionType
-from scene_state import SceneState
+from scene import Scene
 
 
 class MainWindow(QWidget):
@@ -18,7 +18,7 @@ class MainWindow(QWidget):
         self.__init_background()
         self.__init_window_size()
 
-        self.scene = SceneState()
+        self.scene = Scene(const.WINDOW_WIDTH, const.WINDOW_HEIGHT)
 
     def __init_window_size(self):
         """Initialises the window size and position"""
