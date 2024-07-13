@@ -27,6 +27,8 @@ class MainWindow(QWidget):
         window_rect = QRect(x, y, const.WINDOW_WIDTH, const.WINDOW_HEIGHT)
 
         self.setGeometry(window_rect)
+        self.setFixedWidth(const.WINDOW_WIDTH)
+        self.setFixedHeight(const.WINDOW_HEIGHT)
 
     def __init_background(self):
         """Initialises the background of window"""
