@@ -1,23 +1,25 @@
 from datetime import datetime
 from random import randrange
+from typing import Optional, List, Literal, Union
 
 from PyQt6.QtGui import QColor
 
+from custom_types import ReferenceLineT
 from constants import WINDOW_WIDTH, WINDOW_HEIGHT, RECT_WIDTH, RECT_HEIGHT, POINT_INTERSECTION_THRESHOLD
 from PyQt6.QtCore import QPoint, QRect
 
 
-def generate_random_id():
+def generate_random_id() -> str:
     """Generates random id based on timestamp"""
     return str(datetime.now().timestamp())
 
 
-def generate_random_color():
+def generate_random_color() -> QColor:
     """Generates random color"""
     return QColor(randrange(0, 255), randrange(0, 255), randrange(0, 255))
 
 
-def get_adjusted_rect_point(point):
+def get_adjusted_rect_point(point: QPoint) -> QPoint:
     """
     Creates adjusted rect point so that new point would be at the center of the rect
     and rect cannot be outside the application window
@@ -38,7 +40,7 @@ def get_adjusted_rect_point(point):
     return QPoint(x, y)
 
 
-def check_point_on_the_line(point, start_point_line, end_point_line):
+def check_point_on_the_line(point: QPoint, start_point_line: QPoint, end_point_line: QPoint):
     """Checks with threshold whether point on the line or not"""
 
     if (end_point_line.x() - start_point_line.x()) == 0:
@@ -52,7 +54,7 @@ def check_point_on_the_line(point, start_point_line, end_point_line):
     return abs(left_part - right_part) < POINT_INTERSECTION_THRESHOLD
 
 
-def calculate_rect_delta(current_point, previous_point):
+def calculate_rect_delta(current_point: QPoint, previous_point: QPoint) -> tuple[int, int]:
     """Calculates rect delta between points"""
     dx = current_point.x() - previous_point.x()
     dy = current_point.y() - previous_point.y()
@@ -60,7 +62,7 @@ def calculate_rect_delta(current_point, previous_point):
     return dx, dy
 
 
-def get_key_of_point(rect_id, line):
+def get_key_of_point(rect_id: str, line: ReferenceLineT) -> Union[Literal["start_point"], Literal["end_point"]]:
     """Defines which key of point should be chosen based on rectangle id"""
     if line["first_rect_id"] == rect_id:
         return "start_point"
@@ -68,7 +70,7 @@ def get_key_of_point(rect_id, line):
         return "end_point"
 
 
-def get_query_rect(moving_rect, dx, dy):
+def get_query_rect(moving_rect: QRect, dx: int, dy: int) -> Optional[QRect]:
     """
     Defines a rectangle which should be queried to search elements in Quad Tree based on the moving direction
 
@@ -90,7 +92,10 @@ def get_query_rect(moving_rect, dx, dy):
     return query_rect
 
 
-def calculate_vector_to_intersection_with(rects, moving_rect, dx, dy):
+def calculate_vector_to_intersection_with(
+        rects: List[QRect],
+        moving_rect: QRect, dx: int, dy: int
+) -> Optional[tuple[int, int]]:
     """
     Calculates a vector to where moving_rect can be moved in order to not intersect other rectangles but be placed in
     border-to-border point with other rectangles
@@ -147,6 +152,6 @@ def calculate_vector_to_intersection_with(rects, moving_rect, dx, dy):
                 min_t_entry = t_entry
 
                 # update available distance vector to intersection
-                vector = [dx * t_entry, dy * t_entry]
+                vector = (int(dx * t_entry), int(dy * t_entry))
 
     return vector

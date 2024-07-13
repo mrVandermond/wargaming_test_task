@@ -1,49 +1,52 @@
+from typing import List, Optional, Dict
+
 from PyQt6.QtCore import Qt, QPoint, QRect
+from PyQt6.QtGui import QMouseEvent
 
 import utils
+from custom_types import ReferenceLineT, RectDataT
 
-from constants import RECT_HEIGHT, RECT_WIDTH, QTREE_NODE_CAPACITY
+from constants import RECT_HEIGHT, RECT_WIDTH, QTREE_NODE_CAPACITY, ActionType
 from quad_tree import QuadTree, QuadTreeNodeData
-from enums import ActionType
 
 
 class Scene:
     """Class which implements core logic of movement and storing rectangles and their reference lines"""
-    def __init__(self, width, height):
+    def __init__(self, width: int, height: int):
         # map of all reference lines between rectangles
         # key -> line id
         # value -> dictionary with line's data
-        self.__reference_lines = {}
+        self.__reference_lines: Dict[str, ReferenceLineT] = {}
 
         # map of links between reference lines and rectangles
         # key -> rectangle id
         # value -> list of related line id
-        self.__rectangle_refs = {}
+        self.__rectangle_refs: Dict[str, List[str]] = {}
 
         # line id used in process of creating new line
-        self.__current_line_id = None
+        self.__current_line_id: Optional[str] = None
 
         # action type of current process
-        self.__current_action = None
+        self.__current_action: Optional[str] = None
 
         # rect data used in process of dragging rect
-        self.__current_rect_data = None
+        self.__current_rect_data: Optional[QuadTreeNodeData] = None
 
-        self.__qtree = QuadTree(QRect(0, 0, width, height), QTREE_NODE_CAPACITY)
+        self.__qtree = QuadTree[RectDataT](QRect(0, 0, width, height), QTREE_NODE_CAPACITY)
 
     @property
-    def rectangles(self):
+    def rectangles(self) -> List[RectDataT]:
         return self.__qtree.traverse()
 
     @property
-    def reference_lines(self):
+    def reference_lines(self) -> dict:
         return self.__reference_lines
 
     @property
-    def current_action(self):
+    def current_action(self) -> Optional[str]:
         return self.__current_action
 
-    def start_creating_ref_line(self, event_point):
+    def start_creating_ref_line(self, event_point: QPoint) -> None:
         """Initiates a process of creating the reference line"""
         data_list = self.__qtree.query(QRect(event_point.x(), event_point.y(), 1, 1))
 
@@ -62,7 +65,7 @@ class Scene:
         }
         self.__current_line_id = line_id
 
-    def move_end_point_ref_line(self, event_point):
+    def move_end_point_ref_line(self, event_point: QPoint) -> None:
         """Moves end point of current line while line has not linked with second rectangle"""
         if self.__current_line_id is None:
             return
@@ -70,8 +73,12 @@ class Scene:
         line = self.__reference_lines[self.__current_line_id]
         line["end_point"] = event_point
 
-    def finish_creating_ref_line(self, event_point):
+    def finish_creating_ref_line(self, event_point: QPoint) -> None:
         """Finishes the process of creating the reference line"""
+
+        if self.__current_line_id is None:
+            return
+
         data_list = self.__qtree.query(QRect(event_point.x(), event_point.y(), 1, 1))
         count = len(data_list)
         line = self.__reference_lines[self.__current_line_id]
@@ -86,18 +93,26 @@ class Scene:
             rect_id = data_list[0].data["id"]
             self.__reference_lines[self.__current_line_id]["second_rect_id"] = rect_id
             self.__rectangle_refs[rect_id].append(self.__current_line_id)
-            self.__rectangle_refs[line["first_rect_id"]].append(self.__current_line_id)
 
-    def delete_ref_line(self, point):
+            if line["first_rect_id"]:
+                self.__rectangle_refs[line["first_rect_id"]].append(self.__current_line_id)
+
+    def delete_ref_line(self, point: QPoint) -> None:
         """Deletes the reference line under the point"""
         for line in self.__reference_lines.values():
-            if utils.check_point_on_the_line(point, line["start_point"], line["end_point"]):
-                self.__rectangle_refs[line["first_rect_id"]].remove(line["id"])
-                self.__rectangle_refs[line["second_rect_id"]].remove(line["id"])
+            start_point, end_point = line["start_point"], line["end_point"]
+            first_rect_id, second_rect_id = line["first_rect_id"], line["second_rect_id"]
+
+            if start_point is None or end_point is None or first_rect_id is None or second_rect_id is None:
+                continue
+
+            if utils.check_point_on_the_line(point, start_point, end_point):
+                self.__rectangle_refs[first_rect_id].remove(line["id"])
+                self.__rectangle_refs[second_rect_id].remove(line["id"])
                 self.__reference_lines.pop(line["id"])
                 break
 
-    def create_rect(self, event_point):
+    def create_rect(self, event_point: QPoint) -> None:
         """Creates a rectangle"""
         adjusted_point = utils.get_adjusted_rect_point(event_point)
         data_list = self.__qtree.query(QRect(adjusted_point.x(), adjusted_point.y(), RECT_WIDTH, RECT_HEIGHT))
@@ -108,7 +123,7 @@ class Scene:
 
         rect_id = utils.generate_random_id()
         rect = QRect(adjusted_point.x(), adjusted_point.y(), RECT_WIDTH, RECT_HEIGHT)
-        node_data = QuadTreeNodeData(rect, rect_id, {
+        node_data = QuadTreeNodeData[RectDataT](rect, rect_id, {
             "id": rect_id,
             "rect": rect,
             "color": utils.generate_random_color(),
@@ -116,14 +131,14 @@ class Scene:
         self.__qtree.insert(node_data)
         self.__rectangle_refs[rect_id] = []
 
-    def start_drag_rect(self, event_point):
+    def start_drag_rect(self, event_point: QPoint) -> None:
         """Initiates a process of dragging the rectangle under the event_point"""
         data_list = self.__qtree.query(QRect(event_point.x(), event_point.y(), 1, 1))
 
         if len(data_list) == 1:
             self.__current_rect_data = data_list[0]
 
-    def drag_rect(self, event_point):
+    def drag_rect(self, event_point: QPoint) -> None:
         """Drags current rectangle to the adjusted_point if possible"""
         if self.__current_rect_data is None or self.__current_action != ActionType.DRAG_RECT:
             return
@@ -162,13 +177,19 @@ class Scene:
         # move all reference lines related to current rectangle
         for line_id in self.__rectangle_refs[rect_data.data["id"]]:
             line = self.__reference_lines[line_id]
+
             point_key = utils.get_key_of_point(rect_data.data["id"], line)
-            line[point_key].setX(line[point_key].x() + dx)
-            line[point_key].setY(line[point_key].y() + dy)
+            point = line[point_key]
+
+            if point is None:
+                continue
+
+            point.setX(point.x() + dx)
+            point.setY(point.y() + dy)
 
         rect.moveTo(adjusted_point)
 
-    def finish_drag_rect(self):
+    def finish_drag_rect(self) -> None:
         """Finishes the process of dragging the current rectangle"""
         if self.__current_rect_data is None:
             return
@@ -176,10 +197,10 @@ class Scene:
         # update rect position into tree
         self.__qtree.update(self.__current_rect_data)
 
-    def set_current_action(self, event):
+    def set_current_action(self, event: QMouseEvent) -> None:
         """Defines current action by event"""
         button = event.button().value
-        is_control_pressed = event.modifiers() == Qt.KeyboardModifier.ControlModifier
+        is_control_pressed = event.modifiers().value == Qt.KeyboardModifier.ControlModifier.value
 
         if button == Qt.MouseButton.LeftButton.value and is_control_pressed:
             self.__current_action = ActionType.DELETE_REF_LINE
@@ -193,7 +214,7 @@ class Scene:
             self.__current_action = ActionType.CREATE_REF_LINE
             return
 
-    def reset_temporal_data(self):
+    def reset_temporal_data(self) -> None:
         """Resets temporal data used in processes of dragging or moving objects"""
         self.__current_action = None
         self.__current_line_id = None
