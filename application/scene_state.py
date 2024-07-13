@@ -121,7 +121,7 @@ class SceneState:
             self.__current_rect = found_rects[0]
 
     def drag_rect(self, event_point):
-        """Drags current rectangle to the event point if possible"""
+        """Drags current rectangle to the adjusted_point if possible"""
         if self.__current_rect is None or self.__current_action != ActionType.DRAG_RECT:
             return
 
@@ -129,24 +129,41 @@ class SceneState:
         rect = rect_obj["rect"]
 
         adjusted_point = utils.get_adjusted_rect_point(event_point)
-        rects = self.__qtree.query(QRect(adjusted_point.x(), adjusted_point.y(), RECT_WIDTH, RECT_HEIGHT))
+        dx, dy = utils.calculate_rect_delta(adjusted_point, QPoint(rect.x(), rect.y()))
+
+        query_rect = utils.get_query_rect(rect, dx, dy)
+
+        if query_rect is None:
+            return
+
+        rects = self.__qtree.query(query_rect)
 
         # remove current rect if it includes into intersected rectangles
         if rect_obj in rects:
             rects.remove(rect_obj)
 
         # check there are no intersected rectangles in the new point
-        if len(rects) == 0:
+        if len(rects) != 0:
+            rectangles = list(map(lambda r: r["rect"], rects))
+            vector = utils.calculate_vector_to_intersection_with(rectangles, rect, dx, dy)
+
+            # if we cannot find a better position just do nothing in that case
+            if vector is None:
+                return
+
+            # move adjusted point right to the last available point before intersection with nearest rectangles
+            adjusted_point = QPoint(rect.x() + vector[0], rect.y() + vector[1])
+            # recalculate dx and dy used for movement of reference lines
             dx, dy = utils.calculate_rect_delta(adjusted_point, QPoint(rect.x(), rect.y()))
 
-            # move all reference lines related to current rectangle
-            for line_id in self.__rectangle_refs[rect_obj["id"]]:
-                line = self.__reference_lines[line_id]
-                point_key = utils.get_key_of_point(rect_obj["id"], line)
-                line[point_key].setX(line[point_key].x() + dx)
-                line[point_key].setY(line[point_key].y() + dy)
+        # move all reference lines related to current rectangle
+        for line_id in self.__rectangle_refs[rect_obj["id"]]:
+            line = self.__reference_lines[line_id]
+            point_key = utils.get_key_of_point(rect_obj["id"], line)
+            line[point_key].setX(line[point_key].x() + dx)
+            line[point_key].setY(line[point_key].y() + dy)
 
-            rect.moveTo(adjusted_point)
+        rect.moveTo(adjusted_point)
 
     def finish_drag_rect(self):
         """Finishes the process of dragging the current rectangle"""
