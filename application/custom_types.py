@@ -20,4 +20,4 @@ class RectDataT(TypedDict):
 
 QuadTreeDataT = TypeVar("QuadTreeDataT")
 QuadTreeNodeT = TypeVar("QuadTreeNodeT")
-QuadTreeTreeNodeDataT = TypeVar("QuadTreeTreeNodeDataT")
+QuadTreeNodeDataT = TypeVar("QuadTreeNodeDataT")

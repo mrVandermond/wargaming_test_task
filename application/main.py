@@ -14,17 +14,19 @@ class MainWindow(QWidget):
     def __init__(self, screen_size: QRect):
         super().__init__(parent=None)
         self.setWindowTitle(const.WINDOW_TITLE)
-        self.screen_size = screen_size
         self.__init_background()
-        self.__init_window_size()
+        self.__init_window_size(screen_size)
 
         self.scene = Scene(const.WINDOW_WIDTH, const.WINDOW_HEIGHT)
 
-    def __init_window_size(self) -> None:
+    def __init_window_size(self, screen_size: QRect) -> None:
         """Initialises the window size and position"""
-        x = (self.screen_size.width() - self.screen_size.x()) // 2 - const.WINDOW_WIDTH // 2
-        y = (self.screen_size.height() - self.screen_size.y()) // 2 - const.WINDOW_HEIGHT // 2
-        window_rect = QRect(x, y, const.WINDOW_WIDTH, const.WINDOW_HEIGHT)
+        window_rect = screen_size
+
+        if screen_size.width() > const.WINDOW_WIDTH and screen_size.height() > const.WINDOW_HEIGHT:
+            x = (screen_size.width() - screen_size.x()) // 2 - const.WINDOW_WIDTH // 2
+            y = (screen_size.height() - screen_size.y()) // 2 - const.WINDOW_HEIGHT // 2
+            window_rect = QRect(x, y, const.WINDOW_WIDTH, const.WINDOW_HEIGHT)
 
         self.setGeometry(window_rect)
         self.setFixedWidth(const.WINDOW_WIDTH)
@@ -120,10 +122,7 @@ class MainWindow(QWidget):
 if __name__ == '__main__':
     application = QApplication([])
     primary_screen = application.primaryScreen()
-    screen_size = QRect(0, 0, const.WINDOW_WIDTH, const.WINDOW_HEIGHT)
-
-    if primary_screen:
-        screen_size = primary_screen.geometry()
+    screen_size = primary_screen.geometry() if primary_screen else application.screens()[0].geometry()
 
     window = MainWindow(screen_size)
     window.show()

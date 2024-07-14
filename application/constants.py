@@ -1,4 +1,4 @@
-WINDOW_TITLE = "Wargaiming Test Task"
+WINDOW_TITLE = "Wargaming Test Task"
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 720
 

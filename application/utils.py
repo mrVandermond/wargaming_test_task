@@ -93,8 +93,10 @@ def get_query_rect(moving_rect: QRect, dx: int, dy: int) -> Optional[QRect]:
 
 
 def calculate_vector_to_intersection_with(
-        rects: List[QRect],
-        moving_rect: QRect, dx: int, dy: int
+    rects: List[QRect],
+    moving_rect: QRect,
+    dx: int,
+    dy: int
 ) -> Optional[tuple[int, int]]:
     """
     Calculates a vector to where moving_rect can be moved in order to not intersect other rectangles but be placed in

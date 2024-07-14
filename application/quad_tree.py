@@ -2,11 +2,11 @@ from typing import Generic, Dict, List, Optional
 
 from PyQt6.QtCore import QRect
 
-from custom_types import QuadTreeTreeNodeDataT, QuadTreeNodeT, QuadTreeDataT
+from custom_types import QuadTreeNodeDataT, QuadTreeNodeT, QuadTreeDataT
 
 
-class QuadTreeNodeData(Generic[QuadTreeTreeNodeDataT]):
-    def __init__(self, rect: QRect, rect_id: str, data: QuadTreeTreeNodeDataT):
+class QuadTreeNodeData(Generic[QuadTreeNodeDataT]):
+    def __init__(self, rect: QRect, rect_id: str, data: QuadTreeNodeDataT):
         self.__rect = rect
         self.__data = data
         self.__id = rect_id
@@ -20,7 +20,7 @@ class QuadTreeNodeData(Generic[QuadTreeTreeNodeDataT]):
         return self.__rect
 
     @property
-    def data(self) -> QuadTreeTreeNodeDataT:
+    def data(self) -> QuadTreeNodeDataT:
         return self.__data
 
 
@@ -155,8 +155,8 @@ class QuadTreeNode(Generic[QuadTreeNodeT]):
 
 
 class QuadTree(Generic[QuadTreeDataT]):
-    def __init__(self, boundary, capacity):
-        self.root = QuadTreeNode(boundary, capacity)
+    def __init__(self, boundary: QRect, capacity: int):
+        self.root = QuadTreeNode[QuadTreeDataT](boundary, capacity)
 
     def insert(self, rect: QuadTreeNodeData[QuadTreeDataT]) -> bool:
         return self.root.insert(rect)
